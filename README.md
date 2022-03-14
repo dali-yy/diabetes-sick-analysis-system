@@ -41,4 +41,5 @@ backend\src\RMMModel
 
 #### 3、界面展示
 
-![屏幕截图 2022-03-14 082036](C:\Users\dali\Desktop\屏幕截图 2022-03-14 082036.png)
+![屏幕截图 2022-03-14 082036](D:\github\diabetes-sick-analysis-system\屏幕截图 2022-03-14 082036.png)
+
