@@ -1,0 +1,295 @@
+<!--index.html-->
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <script src="http://cdn.bootcss.com/jquery/2.1.4/jquery.min.js"></script>
+    <script src="http://cdn.bootcss.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+    <script src="http://127.0.0.1:3000/graph/getGraph"></script>
+    <script src="http://127.0.0.1:3000/graph/getConvertPinyin"></script>
+    <link href="http://cdn.bootcss.com/bootstrap/3.3.4/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://127.0.0.1:3000/graph/getCss"/>
+</head>
+<body>
+    <div class="total_left">
+        <h2 class="title">糖尿病知识图谱</h2>
+        <div class="mode">
+            <span>Circles</span>
+            <span>Texts</span>
+        </div>
+        <div class="search">
+            <input type="text">
+        </div>
+        <div class="indicator"></div>
+    </div>
+
+    <svg class="svg1"></svg>
+
+    <div class="info">
+        <h4></h4>
+        <h5></h5>
+    </div>
+</body>
+<script>
+    var names = ['疾病', '症状', '检查', '药物或手术', '非药物/手术治疗', '病因', '多发人群', '类型', '糖尿病',];
+    var colors = ['#6ca46c', '#4e88af', '#ca635f', '#d2907c', '#C3D9FF', '#ded295', '#19CAAD', '#f5ccf6', '#c16bfe'];
+    for (var i = 0; i < names.length; i++) {
+        $('.indicator').append("<div><span style='background-color: " + colors[i] + "'></span>" + names[i] + "</div>");
+    }
+
+    $(document).ready(function () {
+
+        var svg = d3.select(".svg1");
+        svg.call(d3.zoom()
+            .scaleExtent([0.1, 8])
+            .on("zoom", function () {
+                $("g").attr("transform", d3.event.transform)
+            })
+        );
+
+        var svgCenterWidth=document.documentElement.clientWidth/3;
+        var svgCenterHeight=document.documentElement.clientHeight/2;
+
+        var simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(function (d) {
+                return d.id;
+            }))
+            .force("charge", d3.forceManyBody())
+            .force("center", d3.forceCenter(svgCenterWidth, svgCenterHeight));
+
+        var graph;
+
+        d3.json("http://127.0.0.1:3000/graph/getJson", function (error, data) {
+            if (error) throw error;
+            graph = data;
+
+            var link = svg.append("g").attr("class", "links")
+                .selectAll("line").data(graph.links)
+                .enter().append("line").attr("stroke-width", function (d) {
+                    return 1;
+                });
+
+            var node = svg.append("g").attr("class", "nodes")
+                .selectAll("circle").data(graph.nodes)
+                .enter().append("circle").attr("r", function (d) {
+                    return d.size/1.5+1;
+                }).attr("fill", function (d) {
+                    return colors[d.group];
+                }).attr("stroke", 'none')
+                .attr("name", function (d) {
+                    return d.id;
+                }).call(
+                    d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended));
+
+            var text = svg.append("g").attr("class", "texts")
+                .selectAll("text").data(graph.nodes)
+                .enter().append("text")
+                .attr("font-size", function (d) {
+                    return d.size/2+3;
+                }).attr("fill", function (d) {
+                    return colors[d.group];
+                }).attr("name", function (d) {
+                    return d.id;
+                }).text(function (d) {
+                    return d.id;
+                }).attr("text-anchor", 'middle')
+                .call(
+                    d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended)
+                );
+
+            node.append("title").text(function (d) {
+                return d.id;
+            });
+
+            simulation
+                .nodes(graph.nodes)
+                .on("tick", ticked);
+            simulation.force("link")
+                .links(graph.links)
+
+            function ticked() {
+                link
+                    .attr("x1", function (d) {
+                        return d.source.x;
+                    })
+                    .attr("y1", function (d) {
+                        return d.source.y;
+                    })
+                    .attr("x2", function (d) {
+                        return d.target.x;
+                    })
+                    .attr("y2", function (d) {
+                        return d.target.y;
+                    });
+
+                node
+                    .attr("cx", function (d) {
+                        return d.x;
+                    })
+                    .attr("cy", function (d) {
+                        return d.y;
+                    });
+
+                text.attr('transform', function (d) {
+                    return 'translate(' + d.x + ',' + (d.y + d.size / 2) + ')';
+                });
+            }
+        });
+
+        var dragging = false;
+
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.01).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+            dragging = true;
+        }
+
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.001);
+            d.fx = null;
+            d.fy = null;
+            dragging = false;
+        }
+
+        $('.mode span').click(function (event) {
+            $('.mode span').removeClass('active');
+            $(this).addClass('active');
+            if ($(this).text() == 'Circles') {
+                $('.texts text').hide();
+                $('.nodes circle').show();
+            } else {
+                $('.texts text').show();
+                $('.nodes circle').hide();
+            }
+        });
+
+        $('.svg1').on('mouseenter', '.nodes circle', function (event) {
+            var name = $(this).attr('name');
+            var detail_name = $(this)['context'].__data__.detail;
+            $('.info h4').css('color', $(this).attr('fill')).text(name);
+            $('.info h5').css('color', $(this).attr('fill')).text(detail_name);
+            if (!dragging) {
+                d3.select(".svg1 .nodes").selectAll('circle').attr('class', function (d) {
+                    if (d.id == name) {
+                        return '';
+                    }
+                    for (var i = 0; i < graph.links.length; i++) {
+                        if (graph.links[i]['source'].id == name && graph.links[i]['target'].id == d.id) {
+                            return '';
+                        }
+                        if (graph.links[i]['target'].id == name && graph.links[i]['source'].id == d.id) {
+                            return '';
+                        }
+                    }
+                    return 'inactive';
+
+
+                });
+
+                d3.select(".svg1 .links").selectAll('line').attr('class', function (d) {
+                    if (d.source.id == name || d.target.id == name) {
+                        return '';
+                    } else {
+                        return 'inactive';
+                    }
+                });
+            }
+        })
+
+        $('.svg1').on('mouseleave', '.nodes circle', function (event) {
+            if (!dragging) {
+                d3.select('.svg1 .nodes').selectAll('circle').attr('class', '');
+                d3.select('.svg1 .links').selectAll('line').attr('class', '');
+            }
+        });
+
+        $('.svg1').on('mouseenter', '.texts text', function (event) {
+            var name = $(this).attr('name');
+            var detail_name= $(this)['context'].__data__.detail;
+            $('.info h5').css('color', $(this).attr('fill')).text(detail_name);
+            $('.info h4').css('color', $(this).attr('fill')).text(name);
+
+            if (!dragging) {
+                var name = $(this).attr('name');
+                d3.select('.svg1 .texts').selectAll('text').attr('class', function (d) {
+                    if (d.id == name) {
+                        return '';
+                    }
+                    for (var i = 0; i < graph.links.length; i++) {
+                        if (graph.links[i]['source'].id == name && graph.links[i]['target'].id == d.id) {
+                            return '';
+                        }
+                        if (graph.links[i]['target'].id == name && graph.links[i]['source'].id == d.id) {
+                            return '';
+                        }
+                    }
+                    return 'inactive';
+                });
+                d3.select(".svg1 .links").selectAll('line').attr('class', function (d) {
+                    if (d.source.id == name || d.target.id == name) {
+                        return '';
+                    } else {
+                        return 'inactive';
+                    }
+                });
+            }
+        });
+
+        $('.svg1').on('mouseleave', '.texts text', function (event) {
+            if (!dragging) {
+                d3.select('.svg1 .texts').selectAll('text').attr('class', '');
+                d3.select('.svg1 .links').selectAll('line').attr('class', '');
+            }
+        });
+
+
+        $('.search input').keyup(function (event) {
+            if ($(this).val() == '') {
+                d3.select('.svg1 .texts').selectAll('text').attr('class', '');
+                d3.select('.svg1 .nodes').selectAll('circle').attr('class', '');
+                d3.select('.svg1 .links').selectAll('line').attr('class', '');
+            } else {
+                var pattern = new RegExp("[`~!@#$^&*()=|{}':;',\\[\\].<>/?~！@#￥……&*（）——|{}【】‘；：”“'。，、？↵\r\n]");
+                var rs = "";
+                for (var i = 0; i < pinyin.getFullChars($(this).val()).toLowerCase().length; i++) {
+                            rs = rs + pinyin.getFullChars($(this).val()).toLowerCase().substr(i, 1).replace(pattern, '');
+                        }
+
+                console.log(rs)
+
+                d3.select('.svg1 .nodes').selectAll('circle').attr('class', function (d) {
+                    if (pinyin.getFullChars(d.id).toLowerCase().indexOf(rs) >= 0) {
+                        return '';
+                    } else {
+                        return 'inactive';
+                    }
+                });
+                d3.select('.svg1 .texts').selectAll('text').attr('class', function (d) {
+                    if (pinyin.getFullChars(d.id).toLowerCase().indexOf(rs) >= 0) {
+                        return '';
+                    } else {
+                        return 'inactive';
+                    }
+                });
+                d3.select(".svg1 .links").selectAll('line').attr('class', function (d) {
+                    return 'inactive';
+                });
+            }
+        });
+    });
+
+</script>
+</html>
